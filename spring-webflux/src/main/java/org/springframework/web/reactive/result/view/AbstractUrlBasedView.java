@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import org.springframework.lang.Nullable;
  */
 public abstract class AbstractUrlBasedView extends AbstractView implements InitializingBean {
 
+	@Nullable
 	private String url;
 
 
@@ -51,7 +52,7 @@ public abstract class AbstractUrlBasedView extends AbstractView implements Initi
 	 * Set the URL of the resource that this view wraps.
 	 * The URL must be appropriate for the concrete View implementation.
 	 */
-	public void setUrl(String url) {
+	public void setUrl(@Nullable String url) {
 		this.url = url;
 	}
 

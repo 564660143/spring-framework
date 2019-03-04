@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,14 +35,15 @@ import org.springframework.util.StringUtils;
  *
  * <p>Typically used for retrieving public static final constants. Usage example:
  *
- * <pre class="code">// standard definition for exposing a static field, specifying the "staticField" property
+ * <pre class="code">
+ * // standard definition for exposing a static field, specifying the "staticField" property
  * &lt;bean id="myField" class="org.springframework.beans.factory.config.FieldRetrievingFactoryBean"&gt;
  *   &lt;property name="staticField" value="java.sql.Connection.TRANSACTION_SERIALIZABLE"/&gt;
  * &lt;/bean&gt;
  *
  * // convenience version that specifies a static field pattern as bean name
  * &lt;bean id="java.sql.Connection.TRANSACTION_SERIALIZABLE"
- *       class="org.springframework.beans.factory.config.FieldRetrievingFactoryBean"/&gt;</pre>
+ *       class="org.springframework.beans.factory.config.FieldRetrievingFactoryBean"/&gt;
  * </pre>
  *
  * <p>If you are using Spring 2.0, you can also use the following style of configuration for
@@ -87,7 +88,7 @@ public class FieldRetrievingFactoryBean
 	 * @see #setTargetObject
 	 * @see #setTargetField
 	 */
-	public void setTargetClass(Class<?> targetClass) {
+	public void setTargetClass(@Nullable Class<?> targetClass) {
 		this.targetClass = targetClass;
 	}
 
@@ -96,7 +97,7 @@ public class FieldRetrievingFactoryBean
 	 */
 	@Nullable
 	public Class<?> getTargetClass() {
-		return targetClass;
+		return this.targetClass;
 	}
 
 	/**
@@ -106,7 +107,7 @@ public class FieldRetrievingFactoryBean
 	 * @see #setTargetClass
 	 * @see #setTargetField
 	 */
-	public void setTargetObject(Object targetObject) {
+	public void setTargetObject(@Nullable Object targetObject) {
 		this.targetObject = targetObject;
 	}
 
@@ -125,8 +126,8 @@ public class FieldRetrievingFactoryBean
 	 * @see #setTargetClass
 	 * @see #setTargetObject
 	 */
-	public void setTargetField(String targetField) {
-		this.targetField = StringUtils.trimAllWhitespace(targetField);
+	public void setTargetField(@Nullable String targetField) {
+		this.targetField = (targetField != null ? StringUtils.trimAllWhitespace(targetField) : null);
 	}
 
 	/**
@@ -202,12 +203,13 @@ public class FieldRetrievingFactoryBean
 		}
 
 		// Try to get the exact method first.
-		Class<?> targetClass = (this.targetObject != null) ? this.targetObject.getClass() : this.targetClass;
+		Class<?> targetClass = (this.targetObject != null ? this.targetObject.getClass() : this.targetClass);
 		this.fieldObject = targetClass.getField(this.targetField);
 	}
 
 
 	@Override
+	@Nullable
 	public Object getObject() throws IllegalAccessException {
 		if (this.fieldObject == null) {
 			throw new FactoryBeanNotInitializedException();

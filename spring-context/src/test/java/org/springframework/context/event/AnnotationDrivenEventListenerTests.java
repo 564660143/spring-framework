@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,6 +63,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.validation.beanvalidation.MethodValidationPostProcessor;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
@@ -153,6 +155,7 @@ public class AnnotationDrivenEventListenerTests {
 
 	@Test
 	public void methodSignatureNoEvent() {
+		@SuppressWarnings("resource")
 		AnnotationConfigApplicationContext failingContext =
 				new AnnotationConfigApplicationContext();
 		failingContext.register(BasicConfiguration.class,
@@ -170,7 +173,6 @@ public class AnnotationDrivenEventListenerTests {
 		AnotherTestEvent event = new AnotherTestEvent(this, "dummy");
 		ReplyEventListener replyEventListener = this.context.getBean(ReplyEventListener.class);
 		TestEventListener listener = this.context.getBean(TestEventListener.class);
-
 
 		this.eventCollector.assertNoEventReceived(listener);
 		this.eventCollector.assertNoEventReceived(replyEventListener);
@@ -491,10 +493,20 @@ public class AnnotationDrivenEventListenerTests {
 
 	@Test
 	public void conditionMatch() {
+		validateConditionMatch(ConditionalEventListener.class);
+	}
+
+	@Test
+	public void conditionMatchWithProxy() {
+		validateConditionMatch(ConditionalEventListener.class, MethodValidationPostProcessor.class);
+	}
+
+	private void validateConditionMatch(Class<?>... classes) {
 		long timestamp = System.currentTimeMillis();
-		load(ConditionalEventListener.class);
+		load(classes);
 		TestEvent event = new TestEvent(this, "OK");
-		TestEventListener listener = this.context.getBean(ConditionalEventListener.class);
+
+		ConditionalEventInterface listener = this.context.getBean(ConditionalEventInterface.class);
 		this.eventCollector.assertNoEventReceived(listener);
 
 		this.context.publishEvent(event);
@@ -503,6 +515,9 @@ public class AnnotationDrivenEventListenerTests {
 
 		this.context.publishEvent("OK");
 		this.eventCollector.assertEvent(listener, event, "OK");
+		this.eventCollector.assertTotalEventsCount(2);
+
+		this.context.publishEvent("NOT OK");
 		this.eventCollector.assertTotalEventsCount(2);
 
 		this.context.publishEvent(timestamp);
@@ -732,7 +747,7 @@ public class AnnotationDrivenEventListenerTests {
 		@EventListener
 		@Async
 		public void handleAsync(AnotherTestEvent event) {
-			assertTrue(!Thread.currentThread().getName().equals(event.content));
+			assertNotEquals(event.content, Thread.currentThread().getName());
 			collectEvent(event);
 			this.countDownLatch.countDown();
 		}
@@ -779,7 +794,7 @@ public class AnnotationDrivenEventListenerTests {
 		@EventListener
 		@Async
 		public void handleAsync(AnotherTestEvent event) {
-			assertTrue(!Thread.currentThread().getName().equals(event.content));
+			assertNotEquals(event.content, Thread.currentThread().getName());
 			this.eventCollector.addEvent(this, event);
 			this.countDownLatch.countDown();
 		}
@@ -805,7 +820,7 @@ public class AnnotationDrivenEventListenerTests {
 		@EventListener
 		@Async
 		public void handleAsync(AnotherTestEvent event) {
-			assertTrue(!Thread.currentThread().getName().equals(event.content));
+			assertNotEquals(event.content, Thread.currentThread().getName());
 			this.eventCollector.addEvent(this, event);
 			this.countDownLatch.countDown();
 		}
@@ -896,8 +911,21 @@ public class AnnotationDrivenEventListenerTests {
 	}
 
 
+	interface ConditionalEventInterface extends Identifiable {
+
+		void handle(TestEvent event);
+
+		void handleString(String payload);
+
+		void handleTimestamp(Long timestamp);
+
+		void handleRatio(Double ratio);
+	}
+
+
 	@Component
-	static class ConditionalEventListener extends TestEventListener {
+	@Validated
+	static class ConditionalEventListener extends TestEventListener implements ConditionalEventInterface {
 
 		@EventListener(condition = "'OK'.equals(#root.event.msg)")
 		@Override
@@ -923,7 +951,7 @@ public class AnnotationDrivenEventListenerTests {
 	}
 
 
-	@Component
+	@Configuration
 	static class OrderedTestListener extends TestEventListener {
 
 		public final List<String> order = new ArrayList<>();

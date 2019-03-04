@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,9 +31,9 @@ import org.springframework.cache.concurrent.ConcurrentMapCache;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.core.io.buffer.support.DataBufferTestUtils;
 import org.springframework.http.CacheControl;
-import org.springframework.http.server.reactive.PathContainer;
+import org.springframework.http.server.PathContainer;
 import org.springframework.mock.http.server.reactive.test.MockServerHttpRequest;
-import org.springframework.mock.http.server.reactive.test.MockServerWebExchange;
+import org.springframework.mock.web.test.server.MockServerWebExchange;
 import org.springframework.web.reactive.HandlerMapping;
 import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping;
 import org.springframework.web.reactive.resource.AppCacheManifestTransformer;
@@ -43,6 +43,8 @@ import org.springframework.web.reactive.resource.CssLinkResourceTransformer;
 import org.springframework.web.reactive.resource.PathResourceResolver;
 import org.springframework.web.reactive.resource.ResourceResolver;
 import org.springframework.web.reactive.resource.ResourceTransformer;
+import org.springframework.web.reactive.resource.ResourceTransformerSupport;
+import org.springframework.web.reactive.resource.ResourceUrlProvider;
 import org.springframework.web.reactive.resource.ResourceWebHandler;
 import org.springframework.web.reactive.resource.VersionResourceResolver;
 import org.springframework.web.reactive.resource.WebJarsResourceResolver;
@@ -81,9 +83,9 @@ public class ResourceHandlerRegistryTests {
 
 	@Test
 	public void mapPathToLocation() throws Exception {
-		MockServerWebExchange exchange = MockServerHttpRequest.get("").toExchange();
+		MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get(""));
 		exchange.getAttributes().put(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE,
-				PathContainer.parse("/testStylesheet.css", StandardCharsets.UTF_8));
+				PathContainer.parsePath("/testStylesheet.css"));
 
 		ResourceWebHandler handler = getHandler("/resources/**");
 		handler.handle(exchange).block(Duration.ofSeconds(5));
@@ -120,8 +122,11 @@ public class ResourceHandlerRegistryTests {
 
 	@Test
 	public void resourceChain() throws Exception {
+		ResourceUrlProvider resourceUrlProvider = Mockito.mock(ResourceUrlProvider.class);
+		this.registry.setResourceUrlProvider(resourceUrlProvider);
 		ResourceResolver mockResolver = Mockito.mock(ResourceResolver.class);
-		ResourceTransformer mockTransformer = Mockito.mock(ResourceTransformer.class);
+		ResourceTransformerSupport mockTransformer = Mockito.mock(ResourceTransformerSupport.class);
+		
 		this.registration.resourceChain(true).addResolver(mockResolver).addTransformer(mockTransformer);
 
 		ResourceWebHandler handler = getHandler("/resources/**");
@@ -138,6 +143,7 @@ public class ResourceHandlerRegistryTests {
 		assertThat(transformers, Matchers.hasSize(2));
 		assertThat(transformers.get(0), Matchers.instanceOf(CachingResourceTransformer.class));
 		assertThat(transformers.get(1), Matchers.equalTo(mockTransformer));
+		Mockito.verify(mockTransformer).setResourceUrlProvider(resourceUrlProvider);
 	}
 
 	@Test

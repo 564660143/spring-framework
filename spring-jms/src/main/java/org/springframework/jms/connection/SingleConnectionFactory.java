@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
+import org.springframework.util.ClassUtils;
 
 /**
  * A JMS ConnectionFactory adapter that returns the same Connection
@@ -59,6 +60,11 @@ import org.springframework.util.Assert;
  * {@code createQueueConnection} and {@code createTopicConnection} will
  * lead to queue/topic mode, respectively; generic {@code createConnection}
  * calls will lead to a JMS 1.1 connection which is able to serve both modes.
+ *
+ * <p>As of Spring Framework 5, this class supports JMS 2.0 {@code JMSContext}
+ * calls and therefore requires the JMS 2.0 API to be present at runtime.
+ * It may nevertheless run against a JMS 1.1 driver (bound to the JMS 2.0 API)
+ * as long as no actual JMS 2.0 calls are triggered by the application's setup.
  *
  * <p>Useful for testing and standalone environments in order to keep using the
  * same Connection for multiple {@link org.springframework.jms.core.JmsTemplate}
@@ -93,22 +99,22 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 
 	private boolean reconnectOnException = false;
 
-	/** The target Connection */
+	/** The target Connection. */
 	@Nullable
 	private Connection connection;
 
-	/** A hint whether to create a queue or topic connection */
+	/** A hint whether to create a queue or topic connection. */
 	@Nullable
 	private Boolean pubSubMode;
 
-	/** An internal aggregator allowing for per-connection ExceptionListeners */
+	/** An internal aggregator allowing for per-connection ExceptionListeners. */
 	@Nullable
 	private AggregatedExceptionListener aggregatedExceptionListener;
 
-	/** Whether the shared Connection has been started */
+	/** Whether the shared Connection has been started. */
 	private int startedCount = 0;
 
-	/** Synchronization monitor for the shared Connection */
+	/** Synchronization monitor for the shared Connection. */
 	private final Object connectionMonitor = new Object();
 
 
@@ -143,7 +149,7 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 	 * Set the target ConnectionFactory which will be used to lazily
 	 * create a single Connection.
 	 */
-	public void setTargetConnectionFactory(ConnectionFactory targetConnectionFactory) {
+	public void setTargetConnectionFactory(@Nullable ConnectionFactory targetConnectionFactory) {
 		this.targetConnectionFactory = targetConnectionFactory;
 	}
 
@@ -151,7 +157,7 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 	 * Return the target ConnectionFactory which will be used to lazily
 	 * create a single Connection, if any.
 	 */
-	@org.springframework.lang.Nullable
+	@Nullable
 	public ConnectionFactory getTargetConnectionFactory() {
 		return this.targetConnectionFactory;
 	}
@@ -165,7 +171,7 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 	 * @see javax.jms.Connection#setClientID
 	 * @see #setTargetConnectionFactory
 	 */
-	public void setClientId(String clientId) {
+	public void setClientId(@Nullable String clientId) {
 		this.clientId = clientId;
 	}
 
@@ -173,7 +179,7 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 	 * Return a JMS client ID for the single Connection created and exposed
 	 * by this ConnectionFactory, if any.
 	 */
-	@org.springframework.lang.Nullable
+	@Nullable
 	protected String getClientId() {
 		return this.clientId;
 	}
@@ -183,7 +189,7 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 	 * registered with the single Connection created by this factory.
 	 * @see #setReconnectOnException
 	 */
-	public void setExceptionListener(ExceptionListener exceptionListener) {
+	public void setExceptionListener(@Nullable ExceptionListener exceptionListener) {
 		this.exceptionListener = exceptionListener;
 	}
 
@@ -344,8 +350,8 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 			if (this.startedCount > 0) {
 				this.connection.start();
 			}
-			if (logger.isInfoEnabled()) {
-				logger.info("Established shared JMS Connection: " + this.connection);
+			if (logger.isDebugEnabled()) {
+				logger.debug("Established shared JMS Connection: " + this.connection);
 			}
 		}
 	}
@@ -356,7 +362,7 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 	 */
 	@Override
 	public void onException(JMSException ex) {
-		logger.warn("Encountered a JMSException - resetting the underlying JMS Connection", ex);
+		logger.info("Encountered a JMSException - resetting the underlying JMS Connection", ex);
 		resetConnection();
 	}
 
@@ -519,10 +525,8 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 		if (target instanceof TopicConnection) {
 			classes.add(TopicConnection.class);
 		}
-		return (Connection) Proxy.newProxyInstance(
-				Connection.class.getClassLoader(),
-				classes.toArray(new Class<?>[classes.size()]),
-				new SharedConnectionInvocationHandler());
+		return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
+				ClassUtils.toClassArray(classes), new SharedConnectionInvocationHandler());
 	}
 
 
@@ -706,12 +710,14 @@ public class SingleConnectionFactory implements ConnectionFactory, QueueConnecti
 
 		@Override
 		public void onException(JMSException ex) {
+			// Iterate over temporary copy in order to avoid ConcurrentModificationException,
+			// since listener invocations may in turn trigger registration of listeners...
+			Set<ExceptionListener> copy;
 			synchronized (connectionMonitor) {
-				// Iterate over temporary copy in order to avoid ConcurrentModificationException,
-				// since listener invocations may in turn trigger registration of listeners...
-				for (ExceptionListener listener : new LinkedHashSet<>(this.delegates)) {
-					listener.onException(ex);
-				}
+				copy = new LinkedHashSet<>(this.delegates);
+			}
+			for (ExceptionListener listener : copy) {
+				listener.onException(ex);
 			}
 		}
 	}

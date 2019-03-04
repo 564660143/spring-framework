@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.springframework.web.servlet.config.annotation;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import javax.servlet.ServletContext;
 
@@ -34,9 +35,14 @@ import org.springframework.web.accept.PathExtensionContentNegotiationStrategy;
 
 /**
  * Creates a {@code ContentNegotiationManager} and configures it with
- * one or more {@link ContentNegotiationStrategy} instances. The following shows
- * the resulting strategy instances, the methods used to configured them, and
- * whether enabled by default:
+ * one or more {@link ContentNegotiationStrategy} instances.
+ *
+ * <p>As of 5.0 you can set the exact strategies to use via
+ * {@link #strategies(List)}.
+ *
+ * <p>As an alternative you can also rely on the set of defaults described below
+ * which can be turned on or off or customized through the methods of this
+ * builder:
  *
  * <table>
  * <tr>
@@ -74,14 +80,12 @@ import org.springframework.web.accept.PathExtensionContentNegotiationStrategy;
  * <p>The order in which strategies are configured is fixed. You can only turn
  * them on or off.
  *
- * <p>For the path extension and parameter strategies you may explicitly add
- * {@link #mediaType MediaType mappings}. Those will be used to resolve path
- * extensions and/or a query parameter value such as "json" to a concrete media
- * type such as "application/json".
- *
- * <p>The path extension strategy will also use {@link ServletContext#getMimeType}
- * and the {@link MediaTypeFactory} to resolve a path
- * extension to a MediaType.
+ * <strong>Note:</strong> if you must use URL-based content type resolution,
+ * the use of a query parameter is simpler and preferable to the use of a path
+ * extension since the latter can cause issues with URI variables, path
+ * parameters, and URI decoding. Consider setting {@link #favorPathExtension}
+ * to {@literal false} or otherwise set the strategies to use explicitly via
+ * {@link #strategies(List)}.
  *
  * @author Rossen Stoyanchev
  * @since 3.2
@@ -102,6 +106,18 @@ public class ContentNegotiationConfigurer {
 		}
 	}
 
+
+	/**
+	 * Set the exact list of strategies to use.
+	 * <p><strong>Note:</strong> use of this method is mutually exclusive with
+	 * use of all other setters in this class which customize a default, fixed
+	 * set of strategies. See class level doc for more details.
+	 * @param strategies the strategies to use
+	 * @since 5.0
+	 */
+	public void strategies(@Nullable List<ContentNegotiationStrategy> strategies) {
+		this.factory.setStrategies(strategies);
+	}
 
 	/**
 	 * Whether the path extension in the URL path should be used to determine
@@ -170,8 +186,11 @@ public class ContentNegotiationConfigurer {
 	}
 
 	/**
-	 * @deprecated as of 5.0, in favor of {@link #useRegisteredExtensionsOnly(boolean)}, which
-	 * has reverse behavior.
+	 * When {@link #favorPathExtension} is set, this property determines whether
+	 * to allow use of JAF (Java Activation Framework) to resolve a path
+	 * extension to a specific MediaType.
+	 * @deprecated as of 5.0, in favor of {@link #useRegisteredExtensionsOnly(boolean)}
+	 * which has reverse behavior
 	 */
 	@Deprecated
 	public ContentNegotiationConfigurer useJaf(boolean useJaf) {
@@ -237,8 +256,8 @@ public class ContentNegotiationConfigurer {
 	 * Set a custom {@link ContentNegotiationStrategy} to use to determine
 	 * the content type to use when no content type is requested.
 	 * <p>By default this is not set.
-	 * @see #defaultContentType
 	 * @since 4.1.2
+	 * @see #defaultContentType
 	 */
 	public ContentNegotiationConfigurer defaultContentTypeStrategy(ContentNegotiationStrategy defaultStrategy) {
 		this.factory.setDefaultContentTypeStrategy(defaultStrategy);
@@ -246,7 +265,12 @@ public class ContentNegotiationConfigurer {
 	}
 
 
-	protected ContentNegotiationManager getContentNegotiationManager() throws Exception {
+	/**
+	 * Build a {@link ContentNegotiationManager} based on this configurer's settings.
+	 * @since 4.3.12
+	 * @see ContentNegotiationManagerFactoryBean#getObject()
+	 */
+	protected ContentNegotiationManager buildContentNegotiationManager() {
 		this.factory.addMediaTypes(this.mediaTypes);
 		return this.factory.build();
 	}

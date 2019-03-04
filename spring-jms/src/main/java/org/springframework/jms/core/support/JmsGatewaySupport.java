@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ import org.springframework.lang.Nullable;
  */
 public abstract class JmsGatewaySupport implements InitializingBean {
 
-	/** Logger available to subclasses */
+	/** Logger available to subclasses. */
 	protected final Log logger = LogFactory.getLog(getClass());
 
 	@Nullable
@@ -76,6 +76,7 @@ public abstract class JmsGatewaySupport implements InitializingBean {
 	/**
 	 * Return the JMS ConnectionFactory used by the gateway.
 	 */
+	@Nullable
 	public final ConnectionFactory getConnectionFactory() {
 		return (this.jmsTemplate != null ? this.jmsTemplate.getConnectionFactory() : null);
 	}
@@ -84,7 +85,7 @@ public abstract class JmsGatewaySupport implements InitializingBean {
 	 * Set the JmsTemplate for the gateway.
 	 * @see #setConnectionFactory(javax.jms.ConnectionFactory)
 	 */
-	public final void setJmsTemplate(JmsTemplate jmsTemplate) {
+	public final void setJmsTemplate(@Nullable JmsTemplate jmsTemplate) {
 		this.jmsTemplate = jmsTemplate;
 	}
 

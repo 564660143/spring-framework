@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,52 +16,74 @@
 
 package org.springframework.web.reactive.function.client
 
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.reactive.awaitSingle
+import kotlinx.coroutines.reactor.mono
 import org.reactivestreams.Publisher
-import org.springframework.http.ResponseEntity
+import org.springframework.core.ParameterizedTypeReference
+import org.springframework.web.reactive.function.client.WebClient.RequestBodySpec
+import org.springframework.web.reactive.function.client.WebClient.RequestHeadersSpec
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 
-
 /**
- * Extension for [WebClient.RequestBodySpec.body] providing a variant without explicit class
- * parameter thanks to Kotlin reified type parameters.
+ * Extension for [WebClient.RequestBodySpec.body] providing a `body<Foo>()` variant
+ * leveraging Kotlin reified type parameters. This extension is not subject to type
+ * erasure and retains actual generic type arguments.
  *
  * @author Sebastien Deleuze
  * @since 5.0
  */
 @Suppress("EXTENSION_SHADOWED_BY_MEMBER")
-inline fun <reified T : Any, S : Publisher<T>> WebClient.RequestBodySpec.body(publisher: S): WebClient.RequestHeadersSpec<*>
-        = body(publisher, T::class.java)
+inline fun <reified T : Any, S : Publisher<T>> RequestBodySpec.body(publisher: S): RequestHeadersSpec<*> =
+		body(publisher, object : ParameterizedTypeReference<T>() {})
 
 /**
- * Extension for [WebClient.ResponseSpec.bodyToMono] providing a `bodyToMono<Foo>()` variant.
+ * Extension for [WebClient.ResponseSpec.bodyToMono] providing a `bodyToMono<Foo>()` variant
+ * leveraging Kotlin reified type parameters. This extension is not subject to type
+ * erasure and retains actual generic type arguments.
  *
  * @author Sebastien Deleuze
  * @since 5.0
  */
-inline fun <reified T : Any> WebClient.ResponseSpec.bodyToMono(): Mono<T> = bodyToMono(T::class.java)
+inline fun <reified T : Any> WebClient.ResponseSpec.bodyToMono(): Mono<T> =
+		bodyToMono(object : ParameterizedTypeReference<T>() {})
 
 
 /**
- * Extension for [WebClient.ResponseSpec.bodyToFlux] providing a `bodyToFlux<Foo>()` variant.
+ * Extension for [WebClient.ResponseSpec.bodyToFlux] providing a `bodyToFlux<Foo>()` variant
+ * leveraging Kotlin reified type parameters. This extension is not subject to type
+ * erasure and retains actual generic type arguments.
  *
  * @author Sebastien Deleuze
  * @since 5.0
  */
-inline fun <reified T : Any> WebClient.ResponseSpec.bodyToFlux(): Flux<T> = bodyToFlux(T::class.java)
+inline fun <reified T : Any> WebClient.ResponseSpec.bodyToFlux(): Flux<T> =
+		bodyToFlux(object : ParameterizedTypeReference<T>() {})
 
 /**
- * Extension for [WebClient.ResponseSpec.toEntity] providing a `bodyToEntity<Foo>()` variant.
+ * Coroutines variant of [WebClient.RequestHeadersSpec.exchange].
  *
  * @author Sebastien Deleuze
- * @since 5.0
+ * @since 5.2
  */
-inline fun <reified T : Any> WebClient.ResponseSpec.toEntity(): Mono<ResponseEntity<T>> = toEntity(T::class.java)
+suspend fun WebClient.RequestHeadersSpec<out WebClient.RequestHeadersSpec<*>>.awaitResponse(): ClientResponse =
+		exchange().awaitSingle()
 
 /**
- * Extension for [WebClient.ResponseSpec.toEntityList] providing a `bodyToEntityList<Foo>()` variant.
+ * Coroutines variant of [WebClient.RequestBodySpec.body].
  *
  * @author Sebastien Deleuze
- * @since 5.0
+ * @since 5.2
  */
-inline fun <reified T : Any> WebClient.ResponseSpec.toEntityList(): Mono<ResponseEntity<List<T>>> = toEntityList(T::class.java)
+inline fun <reified T: Any> WebClient.RequestBodySpec.body(crossinline supplier: suspend () -> T)
+		= body(GlobalScope.mono { supplier.invoke() })
+
+/**
+ * Coroutines variant of [WebClient.ResponseSpec.bodyToMono].
+ *
+ * @author Sebastien Deleuze
+ * @since 5.2
+ */
+suspend inline fun <reified T : Any> WebClient.ResponseSpec.awaitBody() : T =
+		bodyToMono<T>().awaitSingle()

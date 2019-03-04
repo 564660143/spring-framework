@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import java.util.Map;
 import java.util.Optional;
 import javax.servlet.http.Part;
 
-import org.junit.Before;
 import org.junit.Test;
 
 import org.springframework.beans.propertyeditors.StringTrimmerEditor;
@@ -48,19 +47,12 @@ import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.mock;
-import static org.springframework.web.method.MvcAnnotationPredicates.requestParam;
-import static org.springframework.web.method.MvcAnnotationPredicates.requestPart;
+import static org.junit.Assert.*;
+import static org.mockito.BDDMockito.*;
+import static org.springframework.web.method.MvcAnnotationPredicates.*;
 
 /**
- * Test fixture with {@link org.springframework.web.method.annotation.RequestParamMethodArgumentResolver}.
+ * Test fixture with {@link RequestParamMethodArgumentResolver}.
  *
  * @author Arjen Poutsma
  * @author Rossen Stoyanchev
@@ -68,20 +60,14 @@ import static org.springframework.web.method.MvcAnnotationPredicates.requestPart
  */
 public class RequestParamMethodArgumentResolverTests {
 
-	private RequestParamMethodArgumentResolver resolver;
+	private RequestParamMethodArgumentResolver resolver = new RequestParamMethodArgumentResolver(null, true);
 
-	private NativeWebRequest webRequest;
+	private MockHttpServletRequest request = new MockHttpServletRequest();
 
-	private MockHttpServletRequest request;
+	private NativeWebRequest webRequest = new ServletWebRequest(request, new MockHttpServletResponse());
 
 	private ResolvableMethod testMethod = ResolvableMethod.on(getClass()).named("handle").build();
 
-	@Before
-	public void setUp() throws Exception {
-		resolver = new RequestParamMethodArgumentResolver(null, true);
-		request = new MockHttpServletRequest();
-		webRequest = new ServletWebRequest(request, new MockHttpServletResponse());
-	}
 
 	@Test
 	public void supportsParameter() {
@@ -390,7 +376,7 @@ public class RequestParamMethodArgumentResolverTests {
 		WebDataBinderFactory binderFactory = mock(WebDataBinderFactory.class);
 		given(binderFactory.createBinder(webRequest, null, "stringNotAnnot")).willReturn(binder);
 
-		this.request.addParameter("stringNotAnnot", "");
+		request.addParameter("stringNotAnnot", "");
 
 		MethodParameter param = this.testMethod.annotNotPresent(RequestParam.class).arg(String.class);
 		Object arg = resolver.resolveArgument(param, null, webRequest, binderFactory);
@@ -405,7 +391,7 @@ public class RequestParamMethodArgumentResolverTests {
 		WebDataBinderFactory binderFactory = mock(WebDataBinderFactory.class);
 		given(binderFactory.createBinder(webRequest, null, "name")).willReturn(binder);
 
-		this.request.addParameter("name", "");
+		request.addParameter("name", "");
 
 		MethodParameter param = this.testMethod.annot(requestParam().notRequired()).arg(String.class);
 		Object arg = resolver.resolveArgument(param, null, webRequest, binderFactory);
@@ -431,7 +417,7 @@ public class RequestParamMethodArgumentResolverTests {
 
 	@Test  // SPR-10180
 	public void resolveEmptyValueToDefault() throws Exception {
-		this.request.addParameter("name", "");
+		request.addParameter("name", "");
 		MethodParameter param = this.testMethod.annot(requestParam().notRequired("bar")).arg(String.class);
 		Object result = resolver.resolveArgument(param, null, webRequest, null);
 		assertEquals("bar", result);
@@ -439,7 +425,7 @@ public class RequestParamMethodArgumentResolverTests {
 
 	@Test
 	public void resolveEmptyValueWithoutDefault() throws Exception {
-		this.request.addParameter("stringNotAnnot", "");
+		request.addParameter("stringNotAnnot", "");
 		MethodParameter param = this.testMethod.annotNotPresent(RequestParam.class).arg(String.class);
 		Object result = resolver.resolveArgument(param, null, webRequest, null);
 		assertEquals("", result);
@@ -447,7 +433,7 @@ public class RequestParamMethodArgumentResolverTests {
 
 	@Test
 	public void resolveEmptyValueRequiredWithoutDefault() throws Exception {
-		this.request.addParameter("name", "");
+		request.addParameter("name", "");
 		MethodParameter param = this.testMethod.annot(requestParam().notRequired()).arg(String.class);
 		Object result = resolver.resolveArgument(param, null, webRequest, null);
 		assertEquals("", result);
@@ -464,10 +450,92 @@ public class RequestParamMethodArgumentResolverTests {
 		Object result = resolver.resolveArgument(param, null, webRequest, binderFactory);
 		assertEquals(Optional.empty(), result);
 
-		this.request.addParameter("name", "123");
+		request.addParameter("name", "123");
 		result = resolver.resolveArgument(param, null, webRequest, binderFactory);
 		assertEquals(Optional.class, result.getClass());
 		assertEquals(123, ((Optional) result).get());
+	}
+
+	@Test
+	@SuppressWarnings("rawtypes")
+	public void missingOptionalParamValue() throws Exception {
+		ConfigurableWebBindingInitializer initializer = new ConfigurableWebBindingInitializer();
+		initializer.setConversionService(new DefaultConversionService());
+		WebDataBinderFactory binderFactory = new DefaultDataBinderFactory(initializer);
+
+		MethodParameter param = this.testMethod.annotPresent(RequestParam.class).arg(Optional.class, Integer.class);
+		Object result = resolver.resolveArgument(param, null, webRequest, binderFactory);
+		assertEquals(Optional.empty(), result);
+
+		result = resolver.resolveArgument(param, null, webRequest, binderFactory);
+		assertEquals(Optional.class, result.getClass());
+		assertFalse(((Optional) result).isPresent());
+	}
+
+	@Test
+	@SuppressWarnings("rawtypes")
+	public void resolveOptionalParamArray() throws Exception {
+		ConfigurableWebBindingInitializer initializer = new ConfigurableWebBindingInitializer();
+		initializer.setConversionService(new DefaultConversionService());
+		WebDataBinderFactory binderFactory = new DefaultDataBinderFactory(initializer);
+
+		MethodParameter param = this.testMethod.annotPresent(RequestParam.class).arg(Optional.class, Integer[].class);
+		Object result = resolver.resolveArgument(param, null, webRequest, binderFactory);
+		assertEquals(Optional.empty(), result);
+
+		request.addParameter("name", "123", "456");
+		result = resolver.resolveArgument(param, null, webRequest, binderFactory);
+		assertEquals(Optional.class, result.getClass());
+		assertArrayEquals(new Integer[] {123, 456}, (Integer[]) ((Optional) result).get());
+	}
+
+	@Test
+	@SuppressWarnings("rawtypes")
+	public void missingOptionalParamArray() throws Exception {
+		ConfigurableWebBindingInitializer initializer = new ConfigurableWebBindingInitializer();
+		initializer.setConversionService(new DefaultConversionService());
+		WebDataBinderFactory binderFactory = new DefaultDataBinderFactory(initializer);
+
+		MethodParameter param = this.testMethod.annotPresent(RequestParam.class).arg(Optional.class, Integer[].class);
+		Object result = resolver.resolveArgument(param, null, webRequest, binderFactory);
+		assertEquals(Optional.empty(), result);
+
+		result = resolver.resolveArgument(param, null, webRequest, binderFactory);
+		assertEquals(Optional.class, result.getClass());
+		assertFalse(((Optional) result).isPresent());
+	}
+
+	@Test
+	@SuppressWarnings("rawtypes")
+	public void resolveOptionalParamList() throws Exception {
+		ConfigurableWebBindingInitializer initializer = new ConfigurableWebBindingInitializer();
+		initializer.setConversionService(new DefaultConversionService());
+		WebDataBinderFactory binderFactory = new DefaultDataBinderFactory(initializer);
+
+		MethodParameter param = this.testMethod.annotPresent(RequestParam.class).arg(Optional.class, List.class);
+		Object result = resolver.resolveArgument(param, null, webRequest, binderFactory);
+		assertEquals(Optional.empty(), result);
+
+		request.addParameter("name", "123", "456");
+		result = resolver.resolveArgument(param, null, webRequest, binderFactory);
+		assertEquals(Optional.class, result.getClass());
+		assertEquals(Arrays.asList("123", "456"), ((Optional) result).get());
+	}
+
+	@Test
+	@SuppressWarnings("rawtypes")
+	public void missingOptionalParamList() throws Exception {
+		ConfigurableWebBindingInitializer initializer = new ConfigurableWebBindingInitializer();
+		initializer.setConversionService(new DefaultConversionService());
+		WebDataBinderFactory binderFactory = new DefaultDataBinderFactory(initializer);
+
+		MethodParameter param = this.testMethod.annotPresent(RequestParam.class).arg(Optional.class, List.class);
+		Object result = resolver.resolveArgument(param, null, webRequest, binderFactory);
+		assertEquals(Optional.empty(), result);
+
+		result = resolver.resolveArgument(param, null, webRequest, binderFactory);
+		assertEquals(Optional.class, result.getClass());
+		assertFalse(((Optional) result).isPresent());
 	}
 
 	@Test
@@ -536,6 +604,8 @@ public class RequestParamMethodArgumentResolverTests {
 			@RequestParam("name") String paramRequired,
 			@RequestParam(name = "name", required = false) String paramNotRequired,
 			@RequestParam("name") Optional<Integer> paramOptional,
+			@RequestParam("name") Optional<Integer[]> paramOptionalArray,
+			@RequestParam("name") Optional<List> paramOptionalList,
 			@RequestParam("mfile") Optional<MultipartFile> multipartFileOptional) {
 	}
 

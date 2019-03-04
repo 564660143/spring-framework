@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,14 +62,14 @@ import org.springframework.util.ClassUtils;
 public class SimpleRemoteStatelessSessionProxyFactoryBean extends SimpleRemoteSlsbInvokerInterceptor
 	implements FactoryBean<Object>, BeanClassLoaderAware {
 
-	/** The business interface of the EJB we're proxying */
+	/** The business interface of the EJB we're proxying. */
 	@Nullable
 	private Class<?> businessInterface;
 
 	@Nullable
 	private ClassLoader beanClassLoader = ClassUtils.getDefaultClassLoader();
 
-	/** EJBObject */
+	/** EJBObject. */
 	@Nullable
 	private Object proxy;
 
@@ -84,7 +84,7 @@ public class SimpleRemoteStatelessSessionProxyFactoryBean extends SimpleRemoteSl
 	 * converted to Spring's generic RemoteAccessException.
 	 * @param businessInterface the business interface of the EJB
 	 */
-	public void setBusinessInterface(Class<?> businessInterface) {
+	public void setBusinessInterface(@Nullable Class<?> businessInterface) {
 		this.businessInterface = businessInterface;
 	}
 
@@ -112,6 +112,7 @@ public class SimpleRemoteStatelessSessionProxyFactoryBean extends SimpleRemoteSl
 
 
 	@Override
+	@Nullable
 	public Object getObject() {
 		return this.proxy;
 	}

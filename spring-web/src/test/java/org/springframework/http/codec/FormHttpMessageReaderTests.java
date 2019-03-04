@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,30 +16,44 @@
 
 package org.springframework.http.codec;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.*;
 import org.junit.Test;
+import org.reactivestreams.Publisher;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 import org.springframework.core.ResolvableType;
+import org.springframework.core.io.buffer.AbstractLeakCheckingTestCase;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.http.server.reactive.test.MockServerHttpRequest;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+
+import static org.junit.Assert.*;
 
 /**
  * @author Sebastien Deleuze
  */
-public class FormHttpMessageReaderTests {
+public class FormHttpMessageReaderTests extends AbstractLeakCheckingTestCase {
 
 	private final FormHttpMessageReader reader = new FormHttpMessageReader();
+
 
 	@Test
 	public void canRead() {
 		assertTrue(this.reader.canRead(
 				ResolvableType.forClassWithGenerics(MultiValueMap.class, String.class, String.class),
+				MediaType.APPLICATION_FORM_URLENCODED));
+
+		assertTrue(this.reader.canRead(
+				ResolvableType.forInstance(new LinkedMultiValueMap<String, String>()),
 				MediaType.APPLICATION_FORM_URLENCODED));
 
 		assertFalse(this.reader.canRead(
@@ -89,11 +103,36 @@ public class FormHttpMessageReaderTests {
 		assertNull("Invalid result", result.getFirst("name 3"));
 	}
 
+	@Test
+	public void readFormError() {
+		DataBuffer fooBuffer = stringBuffer("name=value");
+		Flux<DataBuffer> body =
+				Flux.just(fooBuffer).concatWith(Flux.error(new RuntimeException()));
+		MockServerHttpRequest request = request(body);
+
+		Flux<MultiValueMap<String, String>> result = this.reader.read(null, request, null);
+		StepVerifier.create(result)
+				.expectError()
+				.verify();
+	}
+
+
 	private MockServerHttpRequest request(String body) {
+		return request(Mono.just(stringBuffer(body)));
+	}
+
+	private MockServerHttpRequest request(Publisher<? extends DataBuffer> body) {
 		return MockServerHttpRequest
 					.method(HttpMethod.GET, "/")
 					.header(HttpHeaders.CONTENT_TYPE,  MediaType.APPLICATION_FORM_URLENCODED_VALUE)
 					.body(body);
+	}
+
+	private DataBuffer stringBuffer(String value) {
+		byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+		DataBuffer buffer = this.bufferFactory.allocateBuffer(bytes.length);
+		buffer.write(bytes);
+		return buffer;
 	}
 
 }

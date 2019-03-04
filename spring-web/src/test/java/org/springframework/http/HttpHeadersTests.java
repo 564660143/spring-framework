@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,12 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -37,13 +39,8 @@ import org.hamcrest.Matchers;
 import org.junit.Test;
 
 import static java.time.format.DateTimeFormatter.*;
-import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
+import static org.hamcrest.Matchers.*;
+import static org.junit.Assert.*;
 
 /**
  * Unit tests for {@link org.springframework.http.HttpHeaders}.
@@ -51,6 +48,7 @@ import static org.junit.Assert.assertTrue;
  * @author Arjen Poutsma
  * @author Sebastien Deleuze
  * @author Brian Clozel
+ * @author Juergen Hoeller
  */
 public class HttpHeadersTests {
 
@@ -168,6 +166,14 @@ public class HttpHeadersTests {
 		assertEquals("Invalid Host header", "localhost", headers.getFirst("Host"));
 	}
 
+	@Test
+	public void ipv6Host() {
+		InetSocketAddress host = InetSocketAddress.createUnresolved("[::1]", 0);
+		headers.setHost(host);
+		assertEquals("Invalid Host header", host, headers.getHost());
+		assertEquals("Invalid Host header", "[::1]", headers.getFirst("Host"));
+	}
+
 	@Test(expected = IllegalArgumentException.class)
 	public void illegalETag() {
 		String eTag = "v2.6";
@@ -276,13 +282,26 @@ public class HttpHeadersTests {
 	}
 
 	@Test
-	public void expires() {
+	public void expiresLong() {
 		Calendar calendar = new GregorianCalendar(2008, 11, 18, 11, 20);
 		calendar.setTimeZone(TimeZone.getTimeZone("CET"));
 		long date = calendar.getTimeInMillis();
 		headers.setExpires(date);
 		assertEquals("Invalid Expires header", date, headers.getExpires());
 		assertEquals("Invalid Expires header", "Thu, 18 Dec 2008 10:20:00 GMT", headers.getFirst("expires"));
+	}
+
+	@Test
+	public void expiresZonedDateTime() {
+		ZonedDateTime zonedDateTime = ZonedDateTime.of(2008, 12, 18, 10, 20, 0, 0, ZoneId.of("GMT"));
+		headers.setExpires(zonedDateTime);
+		assertEquals("Invalid Expires header", zonedDateTime.toInstant().toEpochMilli(), headers.getExpires());
+		assertEquals("Invalid Expires header", "Thu, 18 Dec 2008 10:20:00 GMT", headers.getFirst("expires"));
+	}
+
+	@Test(expected = DateTimeException.class)  // SPR-16560
+	public void expiresLargeDate() {
+		headers.setExpires(Long.MAX_VALUE);
 	}
 
 	@Test  // SPR-10648 (example is from INT-3063)
@@ -324,17 +343,30 @@ public class HttpHeadersTests {
 
 	@Test
 	public void cacheControl() {
-		String cacheControl = "no-cache";
-		headers.setCacheControl(cacheControl);
-		assertEquals("Invalid Cache-Control header", cacheControl, headers.getCacheControl());
+		headers.setCacheControl("no-cache");
+		assertEquals("Invalid Cache-Control header", "no-cache", headers.getCacheControl());
 		assertEquals("Invalid Cache-Control header", "no-cache", headers.getFirst("cache-control"));
+	}
+
+	@Test
+	public void cacheControlBuilder() {
+		headers.setCacheControl(CacheControl.noCache());
+		assertEquals("Invalid Cache-Control header", "no-cache", headers.getCacheControl());
+		assertEquals("Invalid Cache-Control header", "no-cache", headers.getFirst("cache-control"));
+	}
+
+	@Test
+	public void cacheControlEmpty() {
+		headers.setCacheControl(CacheControl.empty());
+		assertNull("Invalid Cache-Control header", headers.getCacheControl());
+		assertNull("Invalid Cache-Control header", headers.getFirst("cache-control"));
 	}
 
 	@Test
 	public void cacheControlAllValues() {
 		headers.add(HttpHeaders.CACHE_CONTROL, "max-age=1000, public");
 		headers.add(HttpHeaders.CACHE_CONTROL, "s-maxage=1000");
-		assertThat(headers.getCacheControl(), is("max-age=1000, public, s-maxage=1000"));
+		assertEquals("max-age=1000, public, s-maxage=1000", headers.getCacheControl());
 	}
 
 	@Test
@@ -350,7 +382,7 @@ public class HttpHeadersTests {
 
 	@Test  // SPR-11917
 	public void getAllowEmptySet() {
-		headers.setAllow(Collections.<HttpMethod> emptySet());
+		headers.setAllow(Collections.emptySet());
 		assertThat(headers.getAllow(), Matchers.emptyCollectionOf(HttpMethod.class));
 	}
 
@@ -503,6 +535,34 @@ public class HttpHeadersTests {
 		headers.clear();
 		headers.set(HttpHeaders.DATE, "Thu Jun 22 22:22:00 2017");
 		assertTrue(headers.getFirstZonedDateTime(HttpHeaders.DATE).isEqual(date));
+	}
+
+	@Test
+	public void basicAuth() {
+		String username = "foo";
+		String password = "bar";
+		headers.setBasicAuth(username, password);
+		String authorization = headers.getFirst(HttpHeaders.AUTHORIZATION);
+		assertNotNull(authorization);
+		assertTrue(authorization.startsWith("Basic "));
+		byte[] result = Base64.getDecoder().decode(authorization.substring(6).getBytes(StandardCharsets.ISO_8859_1));
+		assertEquals("foo:bar", new String(result, StandardCharsets.ISO_8859_1));
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void basicAuthIllegalChar() {
+		String username = "foo";
+		String password = "\u03BB";
+		headers.setBasicAuth(username, password);
+	}
+
+	@Test
+	public void bearerAuth() {
+		String token = "foo";
+
+		headers.setBearerAuth(token);
+		String authorization = headers.getFirst(HttpHeaders.AUTHORIZATION);
+		assertEquals("Bearer foo", authorization);
 	}
 
 }

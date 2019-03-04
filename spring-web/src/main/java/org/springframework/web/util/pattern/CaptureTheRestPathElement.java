@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,13 @@
 
 package org.springframework.web.util.pattern;
 
+import java.util.List;
+
+import org.springframework.http.server.PathContainer.Element;
+import org.springframework.http.server.PathContainer.PathSegment;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.util.pattern.PathPattern.MatchingContext;
-
-import java.util.List;
-
-import org.springframework.http.server.reactive.PathContainer.Element;
-import org.springframework.http.server.reactive.PathContainer.Segment;
 
 /**
  * A path element representing capturing the rest of a path. In the pattern
@@ -38,6 +37,7 @@ class CaptureTheRestPathElement extends PathElement {
 
 
 	/**
+	 * Create a new {@link CaptureTheRestPathElement} instance.
 	 * @param pos position of the path element within the path pattern text
 	 * @param captureDescriptor a character array containing contents like '{' '*' 'a' 'b' '}'
 	 * @param separator the separator used in the path pattern
@@ -66,9 +66,9 @@ class CaptureTheRestPathElement extends PathElement {
 			MultiValueMap<String,String> parametersCollector = null;
 			for (int i = pathIndex; i < matchingContext.pathLength; i++) {
 				Element element = matchingContext.pathElements.get(i);
-				if (element instanceof Segment) {
-					MultiValueMap<String, String> parameters = ((Segment)element).parameters();
-					if (parameters != null && parameters.size()!=0) {
+				if (element instanceof PathSegment) {
+					MultiValueMap<String, String> parameters = ((PathSegment) element).parameters();
+					if (!parameters.isEmpty()) {
 						if (parametersCollector == null) {
 							parametersCollector = new LinkedMultiValueMap<>();
 						}
@@ -76,18 +76,18 @@ class CaptureTheRestPathElement extends PathElement {
 					}
 				}
 			}
-			matchingContext.set(variableName, pathToString(pathIndex, matchingContext.pathElements),
+			matchingContext.set(this.variableName, pathToString(pathIndex, matchingContext.pathElements),
 					parametersCollector == null?NO_PARAMETERS:parametersCollector);
 		}
 		return true;
 	}
-	
+
 	private String pathToString(int fromSegment, List<Element> pathElements) {
 		StringBuilder buf = new StringBuilder();
 		for (int i = fromSegment, max = pathElements.size(); i < max; i++) {
 			Element element = pathElements.get(i);
-			if (element instanceof Segment) {
-				buf.append(((Segment)element).valueDecoded());
+			if (element instanceof PathSegment) {
+				buf.append(((PathSegment)element).valueToMatch());
 			}
 			else {
 				buf.append(element.value());

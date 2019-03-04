@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,15 @@ package org.springframework.beans.factory.support;
 
 import java.beans.PropertyDescriptor;
 import java.io.Serializable;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Executable;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
@@ -32,8 +36,17 @@ import java.util.Comparator;
 import java.util.Set;
 
 import org.springframework.beans.BeanMetadataElement;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
+import org.springframework.beans.factory.config.DependencyDescriptor;
 import org.springframework.beans.factory.config.TypedStringValue;
+import org.springframework.core.MethodParameter;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.annotation.SynthesizingMethodParameter;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
@@ -48,7 +61,29 @@ import org.springframework.util.ClassUtils;
  * @since 1.1.2
  * @see AbstractAutowireCapableBeanFactory
  */
-abstract class AutowireUtils {
+public abstract class AutowireUtils {
+
+	private static final Comparator<Executable> EXECUTABLE_COMPARATOR = (e1, e2) -> {
+		int result = Boolean.compare(Modifier.isPublic(e2.getModifiers()), Modifier.isPublic(e1.getModifiers()));
+		return result != 0 ? result : Integer.compare(e2.getParameterCount(), e1.getParameterCount());
+	};
+
+	private static final AnnotatedElement EMPTY_ANNOTATED_ELEMENT = new AnnotatedElement() {
+		@Override
+		@Nullable
+		public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
+			return null;
+		}
+		@Override
+		public Annotation[] getAnnotations() {
+			return new Annotation[0];
+		}
+		@Override
+		public Annotation[] getDeclaredAnnotations() {
+			return new Annotation[0];
+		}
+	};
+
 
 	/**
 	 * Sort the given constructors, preferring public constructors and "greedy" ones with
@@ -57,20 +92,8 @@ abstract class AutowireUtils {
 	 * decreasing number of arguments.
 	 * @param constructors the constructor array to sort
 	 */
-	public static void sortConstructors(Constructor<?>[] constructors) {
-		Arrays.sort(constructors, new Comparator<Constructor<?>>() {
-			@Override
-			public int compare(Constructor<?> c1, Constructor<?> c2) {
-				boolean p1 = Modifier.isPublic(c1.getModifiers());
-				boolean p2 = Modifier.isPublic(c2.getModifiers());
-				if (p1 != p2) {
-					return (p1 ? -1 : 1);
-				}
-				int c1pl = c1.getParameterCount();
-				int c2pl = c2.getParameterCount();
-				return (c1pl < c2pl ? 1 : (c1pl > c2pl ? -1 : 0));
-			}
-		});
+	static void sortConstructors(Constructor<?>[] constructors) {
+		Arrays.sort(constructors, EXECUTABLE_COMPARATOR);
 	}
 
 	/**
@@ -80,20 +103,8 @@ abstract class AutowireUtils {
 	 * decreasing number of arguments.
 	 * @param factoryMethods the factory method array to sort
 	 */
-	public static void sortFactoryMethods(Method[] factoryMethods) {
-		Arrays.sort(factoryMethods, new Comparator<Method>() {
-			@Override
-			public int compare(Method fm1, Method fm2) {
-				boolean p1 = Modifier.isPublic(fm1.getModifiers());
-				boolean p2 = Modifier.isPublic(fm2.getModifiers());
-				if (p1 != p2) {
-					return (p1 ? -1 : 1);
-				}
-				int c1pl = fm1.getParameterCount();
-				int c2pl = fm2.getParameterCount();
-				return (c1pl < c2pl ? 1 : (c1pl > c2pl ? -1 : 0));
-			}
-		});
+	static void sortFactoryMethods(Method[] factoryMethods) {
+		Arrays.sort(factoryMethods, EXECUTABLE_COMPARATOR);
 	}
 
 	/**
@@ -102,7 +113,7 @@ abstract class AutowireUtils {
 	 * @param pd the PropertyDescriptor of the bean property
 	 * @return whether the bean property is excluded
 	 */
-	public static boolean isExcludedFromDependencyCheck(PropertyDescriptor pd) {
+	static boolean isExcludedFromDependencyCheck(PropertyDescriptor pd) {
 		Method wm = pd.getWriteMethod();
 		if (wm == null) {
 			return false;
@@ -124,7 +135,7 @@ abstract class AutowireUtils {
 	 * @param interfaces the Set of interfaces (Class objects)
 	 * @return whether the setter method is defined by an interface
 	 */
-	public static boolean isSetterDefinedInInterface(PropertyDescriptor pd, Set<Class<?>> interfaces) {
+	static boolean isSetterDefinedInInterface(PropertyDescriptor pd, Set<Class<?>> interfaces) {
 		Method setter = pd.getWriteMethod();
 		if (setter != null) {
 			Class<?> targetClass = setter.getDeclaringClass();
@@ -145,8 +156,7 @@ abstract class AutowireUtils {
 	 * @param requiredType the type to assign the result to
 	 * @return the resolved value
 	 */
-	@Nullable
-	public static Object resolveAutowiringValue(Object autowiringValue, Class<?> requiredType) {
+	static Object resolveAutowiringValue(Object autowiringValue, Class<?> requiredType) {
 		if (autowiringValue instanceof ObjectFactory && !requiredType.isInstance(autowiringValue)) {
 			ObjectFactory<?> factory = (ObjectFactory<?>) autowiringValue;
 			if (autowiringValue instanceof Serializable && requiredType.isInterface()) {
@@ -166,7 +176,7 @@ abstract class AutowireUtils {
 	 * on the given method itself.
 	 * <p>For example, given a factory method with the following signature, if
 	 * {@code resolveReturnTypeForFactoryMethod()} is invoked with the reflected
-	 * method for {@code creatProxy()} and an {@code Object[]} array containing
+	 * method for {@code createProxy()} and an {@code Object[]} array containing
 	 * {@code MyService.class}, {@code resolveReturnTypeForFactoryMethod()} will
 	 * infer that the target return type is {@code MyService}.
 	 * <pre class="code">{@code public static <T> T createProxy(Class<T> clazz)}</pre>
@@ -191,7 +201,7 @@ abstract class AutowireUtils {
 	 * @return the resolved target return type or the standard method return type
 	 * @since 3.2.5
 	 */
-	public static Class<?> resolveReturnTypeForFactoryMethod(
+	static Class<?> resolveReturnTypeForFactoryMethod(
 			Method method, Object[] args, @Nullable ClassLoader classLoader) {
 
 		Assert.notNull(method, "Method must not be null");
@@ -282,6 +292,110 @@ abstract class AutowireUtils {
 		return method.getReturnType();
 	}
 
+	/**
+	 * Determine if the supplied {@link Parameter} can <em>potentially</em> be
+	 * autowired from an {@link AutowireCapableBeanFactory}.
+	 * <p>Returns {@code true} if the supplied parameter is annotated or
+	 * meta-annotated with {@link Autowired @Autowired},
+	 * {@link Qualifier @Qualifier}, or {@link Value @Value}.
+	 * <p>Note that {@link #resolveDependency} may still be able to resolve the
+	 * dependency for the supplied parameter even if this method returns {@code false}.
+	 * @param parameter the parameter whose dependency should be autowired (must not be
+	 * {@code null})
+	 * @param parameterIndex the index of the parameter in the constructor or method
+	 * that declares the parameter
+	 * @since 5.2
+	 * @see #resolveDependency
+	 */
+	public static boolean isAutowirable(Parameter parameter, int parameterIndex) {
+		Assert.notNull(parameter, "Parameter must not be null");
+		AnnotatedElement annotatedParameter = getEffectiveAnnotatedParameter(parameter, parameterIndex);
+		return (AnnotatedElementUtils.hasAnnotation(annotatedParameter, Autowired.class) ||
+				AnnotatedElementUtils.hasAnnotation(annotatedParameter, Qualifier.class) ||
+				AnnotatedElementUtils.hasAnnotation(annotatedParameter, Value.class));
+	}
+
+	/**
+	 * Resolve the dependency for the supplied {@link Parameter} from the
+	 * supplied {@link AutowireCapableBeanFactory}.
+	 * <p>Provides comprehensive autowiring support for individual method parameters
+	 * on par with Spring's dependency injection facilities for autowired fields and
+	 * methods, including support for {@link Autowired @Autowired},
+	 * {@link Qualifier @Qualifier}, and {@link Value @Value} with support for property
+	 * placeholders and SpEL expressions in {@code @Value} declarations.
+	 * <p>The dependency is required unless the parameter is annotated or meta-annotated
+	 * with {@link Autowired @Autowired} with the {@link Autowired#required required}
+	 * flag set to {@code false}.
+	 * <p>If an explicit <em>qualifier</em> is not declared, the name of the parameter
+	 * will be used as the qualifier for resolving ambiguities.
+	 * @param parameter the parameter whose dependency should be resolved (must not be
+	 * {@code null})
+	 * @param parameterIndex the index of the parameter in the constructor or method
+	 * that declares the parameter
+	 * @param containingClass the concrete class that contains the parameter; this may
+	 * differ from the class that declares the parameter in that it may be a subclass
+	 * thereof, potentially substituting type variables (must not be {@code null})
+	 * @param beanFactory the {@code AutowireCapableBeanFactory} from which to resolve
+	 * the dependency (must not be {@code null})
+	 * @return the resolved object, or {@code null} if none found
+	 * @throws BeansException if dependency resolution failed
+	 * @since 5.2
+	 * @see #isAutowirable
+	 * @see Autowired#required
+	 * @see SynthesizingMethodParameter#forExecutable(Executable, int)
+	 * @see AutowireCapableBeanFactory#resolveDependency(DependencyDescriptor, String)
+	 */
+	@Nullable
+	public static Object resolveDependency(
+			Parameter parameter, int parameterIndex, Class<?> containingClass, AutowireCapableBeanFactory beanFactory)
+			throws BeansException {
+
+		Assert.notNull(parameter, "Parameter must not be null");
+		Assert.notNull(containingClass, "Containing class must not be null");
+		Assert.notNull(beanFactory, "AutowireCapableBeanFactory must not be null");
+
+		AnnotatedElement annotatedParameter = getEffectiveAnnotatedParameter(parameter, parameterIndex);
+		Autowired autowired = AnnotatedElementUtils.findMergedAnnotation(annotatedParameter, Autowired.class);
+		boolean required = (autowired == null || autowired.required());
+
+		MethodParameter methodParameter = SynthesizingMethodParameter.forExecutable(
+				parameter.getDeclaringExecutable(), parameterIndex);
+		DependencyDescriptor descriptor = new DependencyDescriptor(methodParameter, required);
+		descriptor.setContainingClass(containingClass);
+		return beanFactory.resolveDependency(descriptor, null);
+	}
+
+	/**
+	 * Due to a bug in {@code javac} on JDK versions prior to JDK 9, looking up
+	 * annotations directly on a {@link Parameter} will fail for inner class
+	 * constructors.
+	 * <h4>Bug in javac in JDK &lt; 9</h4>
+	 * <p>The parameter annotations array in the compiled byte code excludes an entry
+	 * for the implicit <em>enclosing instance</em> parameter for an inner class
+	 * constructor.
+	 * <h4>Workaround</h4>
+	 * <p>This method provides a workaround for this off-by-one error by allowing the
+	 * caller to access annotations on the preceding {@link Parameter} object (i.e.,
+	 * {@code index - 1}). If the supplied {@code index} is zero, this method returns
+	 * an empty {@code AnnotatedElement}.
+	 * <h4>WARNING</h4>
+	 * <p>The {@code AnnotatedElement} returned by this method should never be cast and
+	 * treated as a {@code Parameter} since the metadata (e.g., {@link Parameter#getName()},
+	 * {@link Parameter#getType()}, etc.) will not match those for the declared parameter
+	 * at the given index in an inner class constructor.
+	 * @return the supplied {@code parameter} or the <em>effective</em> {@code Parameter}
+	 * if the aforementioned bug is in effect
+	 */
+	private static AnnotatedElement getEffectiveAnnotatedParameter(Parameter parameter, int index) {
+		Executable executable = parameter.getDeclaringExecutable();
+		if (executable instanceof Constructor && ClassUtils.isInnerClass(executable.getDeclaringClass()) &&
+				executable.getParameterAnnotations().length == executable.getParameterCount() - 1) {
+			// Bug in javac in JDK <9: annotation array excludes enclosing instance parameter
+			// for inner classes, so access it with the actual parameter index lowered by 1
+			return (index == 0 ? EMPTY_ANNOTATED_ELEMENT : executable.getParameters()[index - 1]);
+		}
+		return parameter;
+	}
 
 	/**
 	 * Reflective InvocationHandler for lazy access to the current target object.

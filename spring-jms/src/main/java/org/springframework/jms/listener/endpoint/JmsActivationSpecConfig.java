@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ import org.springframework.lang.Nullable;
  */
 public class JmsActivationSpecConfig {
 
-	/** Constants instance for javax.jms.Session */
+	/** Constants instance for {@code javax.jms.Session}. */
 	private static final Constants sessionConstants = new Constants(Session.class);
 
 
@@ -78,7 +78,7 @@ public class JmsActivationSpecConfig {
 	private MessageConverter messageConverter;
 
 
-	public void setDestinationName(String destinationName) {
+	public void setDestinationName(@Nullable String destinationName) {
 		this.destinationName = destinationName;
 	}
 
@@ -108,7 +108,7 @@ public class JmsActivationSpecConfig {
 		}
 	}
 
-	public void setReplyQosSettings(QosSettings replyQosSettings) {
+	public void setReplyQosSettings(@Nullable QosSettings replyQosSettings) {
 		this.replyQosSettings = replyQosSettings;
 	}
 
@@ -139,7 +139,7 @@ public class JmsActivationSpecConfig {
 		return this.subscriptionShared;
 	}
 
-	public void setSubscriptionName(String subscriptionName) {
+	public void setSubscriptionName(@Nullable String subscriptionName) {
 		this.subscriptionName = subscriptionName;
 	}
 
@@ -148,9 +148,9 @@ public class JmsActivationSpecConfig {
 		return this.subscriptionName;
 	}
 
-	public void setDurableSubscriptionName(String durableSubscriptionName) {
+	public void setDurableSubscriptionName(@Nullable String durableSubscriptionName) {
 		this.subscriptionName = durableSubscriptionName;
-		this.subscriptionDurable = true;
+		this.subscriptionDurable = (durableSubscriptionName != null);
 	}
 
 	@Nullable
@@ -158,7 +158,7 @@ public class JmsActivationSpecConfig {
 		return (this.subscriptionDurable ? this.subscriptionName : null);
 	}
 
-	public void setClientId(String clientId) {
+	public void setClientId(@Nullable String clientId) {
 		this.clientId = clientId;
 	}
 
@@ -167,7 +167,7 @@ public class JmsActivationSpecConfig {
 		return this.clientId;
 	}
 
-	public void setMessageSelector(String messageSelector) {
+	public void setMessageSelector(@Nullable String messageSelector) {
 		this.messageSelector = messageSelector;
 	}
 
@@ -274,7 +274,7 @@ public class JmsActivationSpecConfig {
 	 * Set the {@link MessageConverter} strategy for converting JMS Messages.
 	 * @param messageConverter the message converter to use
 	 */
-	public void setMessageConverter(MessageConverter messageConverter) {
+	public void setMessageConverter(@Nullable MessageConverter messageConverter) {
 		this.messageConverter = messageConverter;
 	}
 

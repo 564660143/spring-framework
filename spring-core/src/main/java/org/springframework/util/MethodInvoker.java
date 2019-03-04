@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,9 +51,9 @@ public class MethodInvoker {
 	private String staticMethod;
 
 	@Nullable
-	private Object[] arguments = new Object[0];
+	private Object[] arguments;
 
-	/** The method we will call */
+	/** The method we will call. */
 	@Nullable
 	private Method methodObject;
 
@@ -65,7 +65,7 @@ public class MethodInvoker {
 	 * @see #setTargetObject
 	 * @see #setTargetMethod
 	 */
-	public void setTargetClass(Class<?> targetClass) {
+	public void setTargetClass(@Nullable Class<?> targetClass) {
 		this.targetClass = targetClass;
 	}
 
@@ -106,7 +106,7 @@ public class MethodInvoker {
 	 * @see #setTargetClass
 	 * @see #setTargetObject
 	 */
-	public void setTargetMethod(String targetMethod) {
+	public void setTargetMethod(@Nullable String targetMethod) {
 		this.targetMethod = targetMethod;
 	}
 

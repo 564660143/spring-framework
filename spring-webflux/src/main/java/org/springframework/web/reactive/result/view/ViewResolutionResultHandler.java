@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,7 @@ import org.springframework.web.server.ServerWebExchange;
  * <li>{@link View} -- View to render with
  * <li>{@link Model} -- attributes to add to the model
  * <li>{@link Map} -- attributes to add to the model
+ * <li>{@link Rendering} -- use case driven API for view resolution</li>
  * <li>{@link ModelAttribute @ModelAttribute} -- attribute for the model
  * <li>Non-simple value -- attribute for the model
  * </ul>
@@ -101,7 +102,7 @@ public class ViewResolutionResultHandler extends HandlerResultHandlerSupport
 	public ViewResolutionResultHandler(List<ViewResolver> viewResolvers,
 			RequestedContentTypeResolver contentTypeResolver) {
 
-		this(viewResolvers, contentTypeResolver, new ReactiveAdapterRegistry());
+		this(viewResolvers, contentTypeResolver, ReactiveAdapterRegistry.getSharedInstance());
 	}
 
 	/**
@@ -150,20 +151,19 @@ public class ViewResolutionResultHandler extends HandlerResultHandlerSupport
 			return true;
 		}
 
-		Class<?> type = result.getReturnType().getRawClass();
+		Class<?> type = result.getReturnType().toClass();
 		ReactiveAdapter adapter = getAdapter(result);
 		if (adapter != null) {
 			if (adapter.isNoValue()) {
 				return true;
 			}
-			type = result.getReturnType().getGeneric().resolve(Object.class);
+			type = result.getReturnType().getGeneric().toClass();
 		}
 
-		return (type != null &&
-				(CharSequence.class.isAssignableFrom(type) || Rendering.class.isAssignableFrom(type) ||
-						Model.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type) ||
-						void.class.equals(type) || View.class.isAssignableFrom(type) ||
-						!BeanUtils.isSimpleProperty(type)));
+		return (CharSequence.class.isAssignableFrom(type) || Rendering.class.isAssignableFrom(type) ||
+				Model.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type) ||
+				void.class.equals(type) || View.class.isAssignableFrom(type) ||
+				!BeanUtils.isSimpleProperty(type));
 	}
 
 	private boolean hasModelAnnotation(MethodParameter parameter) {
@@ -203,12 +203,12 @@ public class ViewResolutionResultHandler extends HandlerResultHandlerSupport
 					MethodParameter parameter = result.getReturnTypeSource();
 					Locale locale = LocaleContextHolder.getLocale(exchange.getLocaleContext());
 
-					Class<?> clazz = valueType.getRawClass();
-					if (clazz == null) {
+					Class<?> clazz = valueType.toClass();
+					if (clazz == Object.class) {
 						clazz = returnValue.getClass();
 					}
 
-					if (returnValue == NO_VALUE || Void.class.equals(clazz) || void.class.equals(clazz)) {
+					if (returnValue == NO_VALUE || clazz == void.class || clazz == Void.class) {
 						viewsMono = resolveViews(getDefaultViewName(exchange), locale);
 					}
 					else if (CharSequence.class.isAssignableFrom(clazz) && !hasModelAnnotation(parameter)) {
@@ -285,7 +285,7 @@ public class ViewResolutionResultHandler extends HandlerResultHandlerSupport
 		return Optional.ofNullable(returnType.getMethodAnnotation(ModelAttribute.class))
 				.filter(ann -> StringUtils.hasText(ann.value()))
 				.map(ModelAttribute::value)
-				.orElse(Conventions.getVariableNameForParameter(returnType));
+				.orElseGet(() -> Conventions.getVariableNameForParameter(returnType));
 	}
 
 	private void updateBindingContext(BindingContext context, ServerWebExchange exchange) {

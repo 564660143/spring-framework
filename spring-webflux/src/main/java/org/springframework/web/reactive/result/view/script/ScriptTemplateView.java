@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -172,7 +172,7 @@ public class ScriptTemplateView extends AbstractUrlBasedView {
 	}
 
 	@Override
-	public void setApplicationContext(ApplicationContext context) {
+	public void setApplicationContext(@Nullable ApplicationContext context) {
 		super.setApplicationContext(context);
 
 		ScriptTemplateConfig viewConfig = autodetectViewConfig();
@@ -196,7 +196,7 @@ public class ScriptTemplateView extends AbstractUrlBasedView {
 		}
 		if (this.resourceLoaderPaths == null) {
 			String resourceLoaderPath = viewConfig.getResourceLoaderPath();
-			setResourceLoaderPath(resourceLoaderPath == null ? DEFAULT_RESOURCE_LOADER_PATH : resourceLoaderPath);
+			setResourceLoaderPath(resourceLoaderPath != null ? resourceLoaderPath : DEFAULT_RESOURCE_LOADER_PATH);
 		}
 		if (this.sharedEngine == null && viewConfig.isSharedEngine() != null) {
 			this.sharedEngine = viewConfig.isSharedEngine();

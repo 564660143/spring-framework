@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,13 @@
 
 package org.springframework.web.util.pattern;
 
+import org.springframework.http.server.PathContainer;
+import org.springframework.http.server.PathContainer.Element;
 import org.springframework.web.util.pattern.PathPattern.MatchingContext;
-import org.springframework.http.server.reactive.PathContainer.Element;
-import org.springframework.http.server.reactive.PathContainer.Segment;
 
 /**
  * A wildcard path element. In the pattern '/foo/&ast;/goo' the * is
- * represented by a WildcardPathElement. Within a path it matches at least 
+ * represented by a WildcardPathElement. Within a path it matches at least
  * one character but at the end of a path it can match zero characters.
  *
  * @author Andy Clement
@@ -36,7 +36,7 @@ class WildcardPathElement extends PathElement {
 
 
 	/**
-	 * Matching on a WildcardPathElement is quite straight forward. Scan the 
+	 * Matching on a WildcardPathElement is quite straight forward. Scan the
 	 * candidate from the candidateIndex onwards for the next separator or the end of the
 	 * candidate.
 	 */
@@ -46,14 +46,14 @@ class WildcardPathElement extends PathElement {
 		// Assert if it exists it is a segment
 		if (pathIndex < matchingContext.pathLength) {
 			Element element = matchingContext.pathElements.get(pathIndex);
-			if (!(element instanceof Segment)) {
+			if (!(element instanceof PathContainer.PathSegment)) {
 				// Should not match a separator
 				return false;
 			}
-			segmentData = ((Segment)element).valueDecoded();
+			segmentData = ((PathContainer.PathSegment)element).valueToMatch();
 			pathIndex++;
 		}
-		
+
 		if (isNoMorePattern()) {
 			if (matchingContext.determineRemainingPath) {
 				matchingContext.remainingPathIndex = pathIndex;
@@ -65,22 +65,19 @@ class WildcardPathElement extends PathElement {
 					return true;
 				}
 				else {
-					return (matchingContext.isAllowOptionalTrailingSlash() &&  // if optional slash is on...
+					return (matchingContext.isMatchOptionalTrailingSeparator() &&  // if optional slash is on...
 							segmentData != null && segmentData.length() > 0 &&  // and there is at least one character to match the *...
 							(pathIndex + 1) == matchingContext.pathLength &&   // and the next path element is the end of the candidate...
 							matchingContext.isSeparator(pathIndex));  // and the final element is a separator
 				}
 			}
 		}
-		else { 
-			if (matchingContext.isMatchStartMatching && pathIndex == matchingContext.pathLength) {
-				return true; // no more data but matches up to this point
-			}
+		else {
 			// Within a path (e.g. /aa/*/bb) there must be at least one character to match the wildcard
 			if (segmentData == null || segmentData.length() == 0) {
 				return false;
 			}
-			return this.next.matches(pathIndex, matchingContext);
+			return (this.next != null && this.next.matches(pathIndex, matchingContext));
 		}
 	}
 

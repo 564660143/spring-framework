@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package org.springframework.http.server.reactive;
 
 import java.net.URI;
 
-import static org.junit.Assert.*;
 import org.junit.Test;
 import reactor.core.publisher.Mono;
 
@@ -27,6 +26,11 @@ import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
+import static org.junit.Assert.*;
+
+/**
+ * @author Sebastien Deleuze
+ */
 public class ServerHttpRequestIntegrationTests extends AbstractHttpHandlerIntegrationTests {
 
 	@Override
@@ -48,6 +52,7 @@ public class ServerHttpRequestIntegrationTests extends AbstractHttpHandlerIntegr
 		@Override
 		public Mono<Void> handle(ServerHttpRequest request, ServerHttpResponse response) {
 			URI uri = request.getURI();
+			assertEquals("http", uri.getScheme());
 			assertNotNull(uri.getHost());
 			assertNotEquals(-1, uri.getPort());
 			assertNotNull(request.getRemoteAddress());
@@ -56,4 +61,5 @@ public class ServerHttpRequestIntegrationTests extends AbstractHttpHandlerIntegr
 			return Mono.empty();
 		}
 	}
+
 }

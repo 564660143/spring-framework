@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,17 +88,19 @@ public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, Sche
 	 * @see java.util.concurrent.Executors#newSingleThreadExecutor()
 	 */
 	public ConcurrentTaskExecutor() {
-		setConcurrentExecutor(null);
+		this.concurrentExecutor = Executors.newSingleThreadExecutor();
+		this.adaptedExecutor = new TaskExecutorAdapter(this.concurrentExecutor);
 	}
 
 	/**
 	 * Create a new ConcurrentTaskExecutor, using the given {@link java.util.concurrent.Executor}.
 	 * <p>Autodetects a JSR-236 {@link javax.enterprise.concurrent.ManagedExecutorService}
 	 * in order to expose {@link javax.enterprise.concurrent.ManagedTask} adapters for it.
-	 * @param concurrentExecutor the {@link java.util.concurrent.Executor} to delegate to
+	 * @param executor the {@link java.util.concurrent.Executor} to delegate to
 	 */
-	public ConcurrentTaskExecutor(Executor concurrentExecutor) {
-		setConcurrentExecutor(concurrentExecutor);
+	public ConcurrentTaskExecutor(@Nullable Executor executor) {
+		this.concurrentExecutor = (executor != null ? executor : Executors.newSingleThreadExecutor());
+		this.adaptedExecutor = getAdaptedExecutor(this.concurrentExecutor);
 	}
 
 
@@ -107,20 +109,9 @@ public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, Sche
 	 * <p>Autodetects a JSR-236 {@link javax.enterprise.concurrent.ManagedExecutorService}
 	 * in order to expose {@link javax.enterprise.concurrent.ManagedTask} adapters for it.
 	 */
-	public final void setConcurrentExecutor(@Nullable Executor concurrentExecutor) {
-		if (concurrentExecutor != null) {
-			this.concurrentExecutor = concurrentExecutor;
-			if (managedExecutorServiceClass != null && managedExecutorServiceClass.isInstance(concurrentExecutor)) {
-				this.adaptedExecutor = new ManagedTaskExecutorAdapter(concurrentExecutor);
-			}
-			else {
-				this.adaptedExecutor = new TaskExecutorAdapter(concurrentExecutor);
-			}
-		}
-		else {
-			this.concurrentExecutor = Executors.newSingleThreadExecutor();
-			this.adaptedExecutor = new TaskExecutorAdapter(this.concurrentExecutor);
-		}
+	public final void setConcurrentExecutor(@Nullable Executor executor) {
+		this.concurrentExecutor = (executor != null ? executor : Executors.newSingleThreadExecutor());
+		this.adaptedExecutor = getAdaptedExecutor(this.concurrentExecutor);
 	}
 
 	/**
@@ -175,12 +166,12 @@ public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, Sche
 		return this.adaptedExecutor.submitListenable(task);
 	}
 
-	/**
-	 * This task executor prefers short-lived work units.
-	 */
-	@Override
-	public boolean prefersShortLivedTasks() {
-		return true;
+
+	private static TaskExecutorAdapter getAdaptedExecutor(Executor concurrentExecutor) {
+		if (managedExecutorServiceClass != null && managedExecutorServiceClass.isInstance(concurrentExecutor)) {
+			return new ManagedTaskExecutorAdapter(concurrentExecutor);
+		}
+		return new TaskExecutorAdapter(concurrentExecutor);
 	}
 
 
@@ -231,17 +222,21 @@ public class ConcurrentTaskExecutor implements AsyncListenableTaskExecutor, Sche
 	protected static class ManagedTaskBuilder {
 
 		public static Runnable buildManagedTask(Runnable task, String identityName) {
-			Map<String, String> properties = new HashMap<>(2);
+			Map<String, String> properties;
 			if (task instanceof SchedulingAwareRunnable) {
+				properties = new HashMap<>(4);
 				properties.put(ManagedTask.LONGRUNNING_HINT,
 						Boolean.toString(((SchedulingAwareRunnable) task).isLongLived()));
+			}
+			else {
+				properties = new HashMap<>(2);
 			}
 			properties.put(ManagedTask.IDENTITY_NAME, identityName);
 			return ManagedExecutors.managedTask(task, properties, null);
 		}
 
 		public static <T> Callable<T> buildManagedTask(Callable<T> task, String identityName) {
-			Map<String, String> properties = new HashMap<>(1);
+			Map<String, String> properties = new HashMap<>(2);
 			properties.put(ManagedTask.IDENTITY_NAME, identityName);
 			return ManagedExecutors.managedTask(task, properties, null);
 		}

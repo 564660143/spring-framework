@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ import org.springframework.lang.Nullable;
  * {@code SAXSource} is <strong>not supported</strong>. In general, the only supported operation
  * on this class is to use the {@code XMLReader} obtained via {@link #getXMLReader()} to parse the
  * input source obtained via {@link #getInputSource()}. Calling {@link #setXMLReader(XMLReader)}
- * or {@link #setInputSource(InputSource)} will result in {@code UnsupportedOperationException}s.
+ * or {@link #setInputSource(InputSource)} will result in {@code UnsupportedOperationException #setInputSource(InputSource)} will result in {@code UnsupportedOperationExceptions}.
  *
  * @author Arjen Poutsma
  * @since 3.0
@@ -47,22 +47,12 @@ import org.springframework.lang.Nullable;
  */
 class StaxSource extends SAXSource {
 
+	@Nullable
 	private XMLEventReader eventReader;
 
+	@Nullable
 	private XMLStreamReader streamReader;
 
-
-	/**
-	 * Construct a new instance of the {@code StaxSource} with the specified {@code XMLStreamReader}.
-	 * The supplied stream reader must be in {@code XMLStreamConstants.START_DOCUMENT} or
-	 * {@code XMLStreamConstants.START_ELEMENT} state.
-	 * @param streamReader the {@code XMLStreamReader} to read from
-	 * @throws IllegalStateException if the reader is not at the start of a document or element
-	 */
-	StaxSource(XMLStreamReader streamReader) {
-		super(new StaxStreamXMLReader(streamReader), new InputSource());
-		this.streamReader = streamReader;
-	}
 
 	/**
 	 * Construct a new instance of the {@code StaxSource} with the specified {@code XMLEventReader}.
@@ -74,6 +64,18 @@ class StaxSource extends SAXSource {
 	StaxSource(XMLEventReader eventReader) {
 		super(new StaxEventXMLReader(eventReader), new InputSource());
 		this.eventReader = eventReader;
+	}
+
+	/**
+	 * Construct a new instance of the {@code StaxSource} with the specified {@code XMLStreamReader}.
+	 * The supplied stream reader must be in {@code XMLStreamConstants.START_DOCUMENT} or
+	 * {@code XMLStreamConstants.START_ELEMENT} state.
+	 * @param streamReader the {@code XMLStreamReader} to read from
+	 * @throws IllegalStateException if the reader is not at the start of a document or element
+	 */
+	StaxSource(XMLStreamReader streamReader) {
+		super(new StaxStreamXMLReader(streamReader), new InputSource());
+		this.streamReader = streamReader;
 	}
 
 

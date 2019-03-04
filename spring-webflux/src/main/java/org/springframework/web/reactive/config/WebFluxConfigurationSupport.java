@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.springframework.web.reactive.config;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 import reactor.core.publisher.Mono;
 
@@ -37,6 +38,7 @@ import org.springframework.format.support.DefaultFormattingConversionService;
 import org.springframework.format.support.FormattingConversionService;
 import org.springframework.http.codec.ServerCodecConfigurer;
 import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 import org.springframework.validation.Errors;
 import org.springframework.validation.MessageCodesResolver;
@@ -52,6 +54,8 @@ import org.springframework.web.reactive.function.server.support.HandlerFunctionA
 import org.springframework.web.reactive.function.server.support.RouterFunctionMapping;
 import org.springframework.web.reactive.function.server.support.ServerResponseResultHandler;
 import org.springframework.web.reactive.handler.AbstractHandlerMapping;
+import org.springframework.web.reactive.handler.WebFluxResponseStatusExceptionHandler;
+import org.springframework.web.reactive.resource.ResourceUrlProvider;
 import org.springframework.web.reactive.result.SimpleHandlerAdapter;
 import org.springframework.web.reactive.result.method.annotation.ArgumentResolverConfigurer;
 import org.springframework.web.reactive.result.method.annotation.RequestMappingHandlerAdapter;
@@ -62,7 +66,6 @@ import org.springframework.web.reactive.result.view.ViewResolutionResultHandler;
 import org.springframework.web.reactive.result.view.ViewResolver;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebExceptionHandler;
-import org.springframework.web.server.handler.ResponseStatusExceptionHandler;
 import org.springframework.web.server.i18n.AcceptHeaderLocaleContextResolver;
 import org.springframework.web.server.i18n.LocaleContextResolver;
 
@@ -72,6 +75,7 @@ import org.springframework.web.server.i18n.LocaleContextResolver;
  * <p>Import directly or extend and override protected methods to customize.
  *
  * @author Rossen Stoyanchev
+ * @author Brian Clozel
  * @since 5.0
  */
 public class WebFluxConfigurationSupport implements ApplicationContextAware {
@@ -90,8 +94,13 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 
 
 	@Override
-	public void setApplicationContext(ApplicationContext applicationContext) {
+	public void setApplicationContext(@Nullable ApplicationContext applicationContext) {
 		this.applicationContext = applicationContext;
+		if (applicationContext != null) {
+				Assert.state(!applicationContext.containsBean("mvcContentNegotiationManager"),
+						"The Java/XML config for Spring MVC and Spring WebFlux cannot both be enabled, " +
+						"e.g. via @EnableWebMvc and @EnableWebFlux, in the same application.");
+		}
 	}
 
 	@Nullable
@@ -108,7 +117,7 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 	@Bean
 	@Order(0)
 	public WebExceptionHandler responseStatusExceptionHandler() {
-		return new ResponseStatusExceptionHandler();
+		return new WebFluxResponseStatusExceptionHandler();
 	}
 
 	@Bean
@@ -120,13 +129,18 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 
 		PathMatchConfigurer configurer = getPathMatchConfigurer();
 		Boolean useTrailingSlashMatch = configurer.isUseTrailingSlashMatch();
-		Boolean useCaseSensitiveMatch = configurer.isUseCaseSensitiveMatch();
 		if (useTrailingSlashMatch != null) {
 			mapping.setUseTrailingSlashMatch(useTrailingSlashMatch);
 		}
+		Boolean useCaseSensitiveMatch = configurer.isUseCaseSensitiveMatch();
 		if (useCaseSensitiveMatch != null) {
 			mapping.setUseCaseSensitiveMatch(useCaseSensitiveMatch);
 		}
+		Map<String, Predicate<Class<?>>> pathPrefixes = configurer.getPathPrefixes();
+		if (pathPrefixes != null) {
+			mapping.setPathPrefixes(pathPrefixes);
+		}
+
 		return mapping;
 	}
 
@@ -192,7 +206,7 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 	public RouterFunctionMapping routerFunctionMapping() {
 		RouterFunctionMapping mapping = createRouterFunctionMapping();
 		mapping.setOrder(-1); // go before RequestMappingHandlerMapping
-		mapping.setMessageCodecConfigurer(serverCodecConfigurer());
+		mapping.setMessageReaders(serverCodecConfigurer().getReaders());
 		mapping.setCorsConfigurations(getCorsConfigurations());
 
 		return mapping;
@@ -217,6 +231,7 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 			resourceLoader = new DefaultResourceLoader();
 		}
 		ResourceHandlerRegistry registry = new ResourceHandlerRegistry(resourceLoader);
+		registry.setResourceUrlProvider(resourceUrlProvider());
 		addResourceHandlers(registry);
 
 		AbstractHandlerMapping handlerMapping = registry.getHandlerMapping();
@@ -237,6 +252,11 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 		return handlerMapping;
 	}
 
+	@Bean
+	public ResourceUrlProvider resourceUrlProvider() {
+		return new ResourceUrlProvider();
+	}
+
 	/**
 	 * Override this method to add resource handlers for serving static resources.
 	 * @see ResourceHandlerRegistry
@@ -247,7 +267,7 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 	@Bean
 	public RequestMappingHandlerAdapter requestMappingHandlerAdapter() {
 		RequestMappingHandlerAdapter adapter = createRequestMappingHandlerAdapter();
-		adapter.setMessageCodecConfigurer(serverCodecConfigurer());
+		adapter.setMessageReaders(serverCodecConfigurer().getReaders());
 		adapter.setWebBindingInitializer(getConfigurableWebBindingInitializer());
 		adapter.setReactiveAdapterRegistry(webFluxAdapterRegistry());
 
@@ -316,6 +336,10 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 		return initializer;
 	}
 
+	/**
+	 * Return a {@link FormattingConversionService} for use with annotated controllers.
+	 * <p>See {@link #addFormatters} as an alternative to overriding this method.
+	 */
 	@Bean
 	public FormattingConversionService webFluxConversionService() {
 		FormattingConversionService service = new DefaultFormattingConversionService();
@@ -324,7 +348,9 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 	}
 
 	/**
-	 * Override to add custom {@link Converter}s and {@link Formatter}s.
+	 * Override this method to add custom {@link Converter} and/or {@link Formatter}
+	 * delegates to the common {@link FormattingConversionService}.
+	 * @see #webFluxConversionService()
 	 */
 	protected void addFormatters(FormatterRegistry registry) {
 	}
@@ -355,11 +381,8 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 					String name = "org.springframework.validation.beanvalidation.OptionalValidatorFactoryBean";
 					clazz = ClassUtils.forName(name, getClass().getClassLoader());
 				}
-				catch (ClassNotFoundException ex) {
-					throw new BeanInitializationException("Could not find default validator class", ex);
-				}
-				catch (LinkageError ex) {
-					throw new BeanInitializationException("Could not load default validator class", ex);
+				catch (ClassNotFoundException | LinkageError ex) {
+					throw new BeanInitializationException("Failed to resolve default validator class", ex);
 				}
 				validator = (Validator) BeanUtils.instantiateClass(clazz);
 			}
@@ -421,14 +444,10 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 
 	@Bean
 	public ServerResponseResultHandler serverResponseResultHandler() {
-		ViewResolverRegistry registry = getViewResolverRegistry();
-		List<ViewResolver> resolvers = registry.getViewResolvers();
-
+		List<ViewResolver> resolvers = getViewResolverRegistry().getViewResolvers();
 		ServerResponseResultHandler handler = new ServerResponseResultHandler();
-		handler.setMessageCodecConfigurer(serverCodecConfigurer());
+		handler.setMessageWriters(serverCodecConfigurer().getWriters());
 		handler.setViewResolvers(resolvers);
-		handler.setOrder(registry.getOrder() + 1);
-
 		return handler;
 	}
 

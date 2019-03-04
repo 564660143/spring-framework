@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -69,10 +68,7 @@ public class WebContentInterceptor extends WebContentGenerator implements Handle
 
 
 	/**
-	 * Set if URL lookup should always use full path within current servlet
-	 * context. Else, the path within the current servlet mapping is used
-	 * if applicable (i.e. in the case of a ".../*" servlet mapping in web.xml).
-	 * Default is "false".
+	 * Shortcut to same property on underlying {@link #setUrlPathHelper UrlPathHelper}.
 	 * <p>Only relevant for the "cacheMappings" setting.
 	 * @see #setCacheMappings
 	 * @see org.springframework.web.util.UrlPathHelper#setAlwaysUseFullPath
@@ -82,11 +78,7 @@ public class WebContentInterceptor extends WebContentGenerator implements Handle
 	}
 
 	/**
-	 * Set if context path and request URI should be URL-decoded.
-	 * Both are returned <i>undecoded</i> by the Servlet API,
-	 * in contrast to the servlet path.
-	 * <p>Uses either the request encoding or the default encoding according
-	 * to the Servlet spec (ISO-8859-1).
+	 * Shortcut to same property on underlying {@link #setUrlPathHelper UrlPathHelper}.
 	 * <p>Only relevant for the "cacheMappings" setting.
 	 * @see #setCacheMappings
 	 * @see org.springframework.web.util.UrlPathHelper#setUrlDecode
@@ -129,7 +121,7 @@ public class WebContentInterceptor extends WebContentGenerator implements Handle
 		Enumeration<?> propNames = cacheMappings.propertyNames();
 		while (propNames.hasMoreElements()) {
 			String path = (String) propNames.nextElement();
-			int cacheSeconds = Integer.valueOf(cacheMappings.getProperty(path));
+			int cacheSeconds = Integer.parseInt(cacheMappings.getProperty(path));
 			this.cacheMappings.put(path, cacheSeconds);
 		}
 	}
@@ -146,7 +138,7 @@ public class WebContentInterceptor extends WebContentGenerator implements Handle
 	 * matches several mappings, it is effectively undefined which one will apply
 	 * (due to the lack of key ordering in the underlying {@code java.util.HashMap}).
 	 * @param cacheControl the {@code CacheControl} to use
-	 * @param paths URL paths that will map to the given {@code CacheControl}
+	 * @param paths the URL paths that will map to the given {@code CacheControl}
 	 * @since 4.2
 	 * @see #setCacheSeconds
 	 * @see org.springframework.util.AntPathMatcher
@@ -178,27 +170,24 @@ public class WebContentInterceptor extends WebContentGenerator implements Handle
 		checkRequest(request);
 
 		String lookupPath = this.urlPathHelper.getLookupPathForRequest(request);
-		if (logger.isDebugEnabled()) {
-			logger.debug("Looking up cache seconds for [" + lookupPath + "]");
-		}
 
 		CacheControl cacheControl = lookupCacheControl(lookupPath);
 		Integer cacheSeconds = lookupCacheSeconds(lookupPath);
 		if (cacheControl != null) {
-			if (logger.isDebugEnabled()) {
-				logger.debug("Applying CacheControl to [" + lookupPath + "]");
+			if (logger.isTraceEnabled()) {
+				logger.trace("Applying " + cacheControl);
 			}
 			applyCacheControl(response, cacheControl);
 		}
 		else if (cacheSeconds != null) {
-			if (logger.isDebugEnabled()) {
-				logger.debug("Applying CacheControl to [" + lookupPath + "]");
+			if (logger.isTraceEnabled()) {
+				logger.trace("Applying cacheSeconds " + cacheSeconds);
 			}
 			applyCacheSeconds(response, cacheSeconds);
 		}
 		else {
-			if (logger.isDebugEnabled()) {
-				logger.debug("Applying default cache seconds to [" + lookupPath + "]");
+			if (logger.isTraceEnabled()) {
+				logger.trace("Applying default cacheSeconds");
 			}
 			prepareResponse(response);
 		}
@@ -211,7 +200,7 @@ public class WebContentInterceptor extends WebContentGenerator implements Handle
 	 * <p>Supports direct matches, e.g. a registered "/test" matches "/test",
 	 * and various Ant-style pattern matches, e.g. a registered "/t*" matches
 	 * both "/test" and "/team". For details, see the AntPathMatcher class.
-	 * @param urlPath URL the bean is mapped to
+	 * @param urlPath the URL the bean is mapped to
 	 * @return the associated {@code CacheControl}, or {@code null} if not found
 	 * @see org.springframework.util.AntPathMatcher
 	 */
@@ -236,7 +225,7 @@ public class WebContentInterceptor extends WebContentGenerator implements Handle
 	 * <p>Supports direct matches, e.g. a registered "/test" matches "/test",
 	 * and various Ant-style pattern matches, e.g. a registered "/t*" matches
 	 * both "/test" and "/team". For details, see the AntPathMatcher class.
-	 * @param urlPath URL the bean is mapped to
+	 * @param urlPath the URL the bean is mapped to
 	 * @return the cacheSeconds integer value, or {@code null} if not found
 	 * @see org.springframework.util.AntPathMatcher
 	 */
@@ -261,18 +250,16 @@ public class WebContentInterceptor extends WebContentGenerator implements Handle
 	 * This implementation is empty.
 	 */
 	@Override
-	public void postHandle(
-			HttpServletRequest request, HttpServletResponse response, Object handler, @Nullable ModelAndView modelAndView)
-			throws Exception {
+	public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler,
+			@Nullable ModelAndView modelAndView) throws Exception {
 	}
 
 	/**
 	 * This implementation is empty.
 	 */
 	@Override
-	public void afterCompletion(
-			HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex)
-			throws Exception {
+	public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler,
+			@Nullable Exception ex) throws Exception {
 	}
 
 }

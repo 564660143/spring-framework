@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,12 +58,12 @@ class MessageBodyClientHttpResponseWrapper implements ClientHttpResponse {
 	 * @throws IOException in case of I/O errors
 	 */
 	public boolean hasMessageBody() throws IOException {
-		HttpStatus responseStatus = this.getStatusCode();
-		if (responseStatus.is1xxInformational() || responseStatus == HttpStatus.NO_CONTENT ||
-				responseStatus == HttpStatus.NOT_MODIFIED) {
+		HttpStatus status = HttpStatus.resolve(getRawStatusCode());
+		if (status != null && (status.is1xxInformational() || status == HttpStatus.NO_CONTENT ||
+				status == HttpStatus.NOT_MODIFIED)) {
 			return false;
 		}
-		else if (getHeaders().getContentLength() == 0) {
+		if (getHeaders().getContentLength() == 0) {
 			return false;
 		}
 		return true;
@@ -79,8 +79,13 @@ class MessageBodyClientHttpResponseWrapper implements ClientHttpResponse {
 	 * @return {@code true} if the response has a zero-length message body, {@code false} otherwise
 	 * @throws IOException in case of I/O errors
 	 */
+	@SuppressWarnings("ConstantConditions")
 	public boolean hasEmptyMessageBody() throws IOException {
 		InputStream body = this.response.getBody();
+		// Per contract body shouldn't be null, but check anyway..
+		if (body == null) {
+			return true;
+		}
 		if (body.markSupported()) {
 			body.mark(1);
 			if (body.read() == -1) {

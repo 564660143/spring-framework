@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,13 +57,13 @@ public class JmsListenerEndpointRegistrar implements BeanFactoryAware, Initializ
 
 	private boolean startImmediately;
 
-	private Object mutex = endpointDescriptors;
+	private Object mutex = this.endpointDescriptors;
 
 
 	/**
 	 * Set the {@link JmsListenerEndpointRegistry} instance to use.
 	 */
-	public void setEndpointRegistry(JmsListenerEndpointRegistry endpointRegistry) {
+	public void setEndpointRegistry(@Nullable JmsListenerEndpointRegistry endpointRegistry) {
 		this.endpointRegistry = endpointRegistry;
 	}
 
@@ -84,7 +84,7 @@ public class JmsListenerEndpointRegistrar implements BeanFactoryAware, Initializ
 	 * or to customize conversion and validation support. See
 	 * {@link DefaultMessageHandlerMethodFactory} javadoc for more details.
 	 */
-	public void setMessageHandlerMethodFactory(MessageHandlerMethodFactory messageHandlerMethodFactory) {
+	public void setMessageHandlerMethodFactory(@Nullable MessageHandlerMethodFactory messageHandlerMethodFactory) {
 		this.messageHandlerMethodFactory = messageHandlerMethodFactory;
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ public abstract class HibernateDaoSupport extends DaoSupport {
 	 * as an alternative to specifying a SessionFactory.
 	 * @see #setSessionFactory
 	 */
-	public final void setHibernateTemplate(HibernateTemplate hibernateTemplate) {
+	public final void setHibernateTemplate(@Nullable HibernateTemplate hibernateTemplate) {
 		this.hibernateTemplate = hibernateTemplate;
 	}
 
@@ -113,7 +113,7 @@ public abstract class HibernateDaoSupport extends DaoSupport {
 	 */
 	@Nullable
 	public final HibernateTemplate getHibernateTemplate() {
-	  return this.hibernateTemplate;
+		return this.hibernateTemplate;
 	}
 
 	@Override

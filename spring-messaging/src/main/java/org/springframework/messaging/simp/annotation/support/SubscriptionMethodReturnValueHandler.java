@@ -17,7 +17,6 @@
 package org.springframework.messaging.simp.annotation.support;
 
 import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 import org.springframework.core.MethodParameter;
 import org.springframework.lang.Nullable;
@@ -26,6 +25,7 @@ import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.core.MessageSendingOperations;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.handler.invocation.HandlerMethodReturnValueHandler;
+import org.springframework.messaging.simp.SimpLogging;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessageType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -58,11 +58,12 @@ import org.springframework.util.Assert;
  */
 public class SubscriptionMethodReturnValueHandler implements HandlerMethodReturnValueHandler {
 
-	private static final Log logger = LogFactory.getLog(SubscriptionMethodReturnValueHandler.class);
+	private static final Log logger = SimpLogging.forLogName(SubscriptionMethodReturnValueHandler.class);
 
 
 	private final MessageSendingOperations<String> messagingTemplate;
 
+	@Nullable
 	private MessageHeaderInitializer headerInitializer;
 
 
@@ -82,7 +83,7 @@ public class SubscriptionMethodReturnValueHandler implements HandlerMethodReturn
 	 * messages sent to the client outbound channel.
 	 * <p>By default this property is not set.
 	 */
-	public void setHeaderInitializer(MessageHeaderInitializer headerInitializer) {
+	public void setHeaderInitializer(@Nullable MessageHeaderInitializer headerInitializer) {
 		this.headerInitializer = headerInitializer;
 	}
 
